@@ -921,7 +921,7 @@ public class MainViewModel : ViewModelBase
             {
                 LoadingStatus = $"dotnet publish -r win-{SettingsViewModel.Arch} -c Release -o ...";
 
-                var dotnetPublishArgs = $"publish {targetFrameworkPart} -r win-{SettingsViewModel.Arch} -c Release -o {DisasmoOutputDirectory} --self-contained true /p:PublishTrimmed=false /p:PublishSingleFile=false /p:CustomBeforeDirectoryBuildProps=\"{tempProperties}\" /p:WarningLevel=0 /p:TreatWarningsAsErrors=false -v:q";
+                var dotnetPublishArgs = $"publish {targetFrameworkPart} -r win-{SettingsViewModel.Arch} -c Release -o \"{DisasmoOutputDirectory}\" --self-contained true /p:PublishTrimmed=false /p:PublishSingleFile=false /p:CustomBeforeDirectoryBuildProps=\"{tempProperties}\" /p:WarningLevel=0 /p:TreatWarningsAsErrors=false -v:q";
 
                 publishResult = await ProcessUtils.RunProcess("dotnet", dotnetPublishArgs, null, currentProjectDirPath, cancellationToken: UserCancellationToken);
             }
@@ -936,7 +936,7 @@ public class MainViewModel : ViewModelBase
 
                 LoadingStatus = "dotnet build -c Release -o ...";
 
-                var dotnetBuildArgs = $"build {targetFrameworkPart} -c Release -o {DisasmoOutputDirectory} --no-self-contained " +
+                var dotnetBuildArgs = $"build {targetFrameworkPart} -c Release -o \"{DisasmoOutputDirectory}\" --no-self-contained " +
                                          "/p:RuntimeIdentifier=\"\" " +
                                          "/p:RuntimeIdentifiers=\"\" " +
                                          "/p:WarningLevel=0 " +
