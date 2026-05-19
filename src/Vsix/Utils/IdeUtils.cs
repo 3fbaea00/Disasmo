@@ -20,23 +20,70 @@ public static class IdeUtils
 
     public static Project GetActiveProject(this DTE dte, string filePath)
     {
-        // Find project by full name
-        if (dte.Solution is not null)
+        var solution = dte.Solution;
+        if (solution is not null)
         {
-            foreach (var projectObject in dte.Solution.Projects)
+            foreach (var projectObject in solution.Projects)
             {
-                if (projectObject is Project project && project.FullName == filePath)
+                var foundProject = FindActiveProject(projectObject, filePath);
+                if (foundProject is not null)
                 {
-                    return project;
+                    return foundProject;
                 }
             }
         }
 
         var activeSolutionProjects = dte.ActiveSolutionProjects as Array;
-        if (activeSolutionProjects is not null && activeSolutionProjects.Length > 0)
-            return activeSolutionProjects.GetValue(0) as Project;
+        if (activeSolutionProjects is not null)
+        {
+            foreach (var projectObject in activeSolutionProjects)
+            {
+                var foundProject = FindActiveProject(projectObject, filePath);
+                if (foundProject is not null)
+                {
+                    return foundProject;
+                }
+            }
+        }
 
         return null;
+
+        static Project FindActiveProject(object projectObject, string filePath)
+        {
+            if (projectObject is ProjectItem projectItem)
+            {
+                projectObject = projectItem.Object;
+                if (projectObject is null)
+                {
+                    return null;
+                }
+            }
+
+            if (projectObject is not Project project)
+            {
+                return null;
+            }
+
+            if (project.FullName == filePath)
+            {
+                return project;
+            }
+
+            if (project.Kind == EnvDTE.Constants.vsProjectKindSolutionItems)
+            {
+                var innerProjects = project.ProjectItems;
+                foreach (var innerProject in innerProjects)
+                {
+                    var foundProject = FindActiveProject(innerProject, filePath);
+                    if (foundProject is not null)
+                    {
+                        return foundProject;
+                    }    
+                }
+            }
+
+            return null;
+        }
     }
 
     public static void SaveActiveDocument(this DTE dte)
