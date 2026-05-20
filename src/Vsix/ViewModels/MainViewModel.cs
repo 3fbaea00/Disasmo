@@ -319,10 +319,14 @@ public class MainViewModel : ViewModelBase
                 envVars["DOTNET_JitDumpFgFile"] = currentFlowgraphFile;
             }
 
-            var command = $"\"{LoaderAppManager.DisasmoLoaderName}.dll\" \"{fileName}.dll\" \"{symbolInfo.ClassName}\" \"{symbolInfo.MethodName}\" {SettingsViewModel.UseUnloadableContext}";
+            string command;
             if (SettingsViewModel.RunAppMode)
             {
                 command = $"\"{fileName}.dll\"";
+            }
+            else
+            {
+                command = $"\"{LoaderAppManager.DisasmoLoaderName}.dll\" \"{fileName}.dll\" \"{symbolInfo.ClassName}\" \"{symbolInfo.MethodName}\" {SettingsViewModel.UseUnloadableContext}";
             }
 
             var executable = "dotnet";
