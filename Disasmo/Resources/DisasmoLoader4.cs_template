@@ -84,7 +84,7 @@ public class DisasmoLoader
     static void CompileMethod(MethodBase methodBase)
     {
         if (methodBase is MethodInfo methodInfo)
-            methodInfo.GetRuntimeBaseDefinition();
+            methodInfo.GetBaseDefinition(); // Magic. Forcing the runtime to trigger virtual slots so PrepareMethod also account for interface method implementations
         RuntimeHelpers.PrepareMethod(methodBase.MethodHandle);
     }
 }
