@@ -366,6 +366,12 @@
                                     <Run Foreground="{DynamicResource DarkGrayText}" Text="Makes it faster, but can lead to build issues"/>
                                 </TextBlock>
                             </CheckBox>
+                            <RadioButton IsChecked="{Binding UseNoReload, Mode=TwoWay}" Margin="0,6,0,0">
+                                <TextBlock TextWrapping="Wrap"  Margin="2,0,0,0">
+                                    <Run Text="No reload"/>
+                                    <Run Foreground="{DynamicResource DarkGrayText}" Text="For specific scenarios involving an assembly with modified bytecode"/>
+                                </TextBlock>
+                            </RadioButton>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="6,6,0,0">
                             <TextBlock Text="Path to Graphviz's dot.exe:"/>

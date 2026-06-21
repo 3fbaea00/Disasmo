@@ -21,9 +21,10 @@ public class SettingsViewModel : ViewModelBase
     private bool _showAsmComments;
     private bool _useDotnetPublishForReload;
     private bool _useDotnetBuildForReload;
+    private bool _useNoReload;
     private bool _runAppMode;
     private bool _printInlinees;
-    private double _fontSize;		
+    private double _fontSize;
     private bool _useNoRestoreFlag;
     private bool _disableLightBulb;
     private bool _useTieredJit;
@@ -48,6 +49,7 @@ public class SettingsViewModel : ViewModelBase
         IlcArgs = Settings.Default.IlcArgs_V9.Replace(";;", Environment.NewLine);
         JitDumpInsteadOfDisasm = Settings.Default.JitDumpInsteadOfDisasm_V9;
         UseDotnetBuildForReload = Settings.Default.UseDotnetBuildForReload_V9;
+        UseNoReload = Settings.Default.UseNoReload_V9;
         RunAppMode = Settings.Default.RunAppMode_V9;
         UseNoRestoreFlag = Settings.Default.UseNoRestoreFlag_V9;
         FontSize = Settings.Default.FontSize;
@@ -119,7 +121,7 @@ public class SettingsViewModel : ViewModelBase
     public bool IsNonCustomDotnetAotMode() =>
         !UseCustomRuntime && (SelectedCustomJit == Crossgen || SelectedCustomJit == Ilc);
 
-    public bool IsNonCustomNativeAOTMode() => 
+    public bool IsNonCustomNativeAOTMode() =>
         !UseCustomRuntime && SelectedCustomJit == Ilc;
 
     public const string DefaultJit = "clrjit.dll";
@@ -288,8 +290,8 @@ public class SettingsViewModel : ViewModelBase
             Settings.Default.Save();
         }
     }
-		
-		public bool UseCustomRuntime
+
+    public bool UseCustomRuntime
     {
         get => _useCustomRuntime;
         set
@@ -303,10 +305,32 @@ public class SettingsViewModel : ViewModelBase
                 JitDumpInsteadOfDisasm = false;
                 UseDotnetPublishForReload = false;
                 UseDotnetBuildForReload = true;
+                UseNoReload = false;
                 PrintInlinees = false;
             }
 
             PopulateCustomJits();
+        }
+    }
+
+    public bool UseNoReload
+    {
+        get => _useNoReload;
+        set
+        {
+            if (Set(ref _useNoReload, value))
+            {
+                if (value)
+                {
+                    _useDotnetBuildForReload = false;
+                    _useDotnetPublishForReload = false;
+                    Settings.Default.UseDotnetBuildForReload_V9 = false;
+                    RaisePropertyChanged(nameof(UseDotnetBuildForReload));
+                    RaisePropertyChanged(nameof(UseDotnetPublishForReload));
+                }
+                Settings.Default.UseNoReload_V9 = value;
+                Settings.Default.Save();
+            }
         }
     }
 
@@ -315,10 +339,19 @@ public class SettingsViewModel : ViewModelBase
         get => _useDotnetPublishForReload;
         set
         {
-            Set(ref _useDotnetPublishForReload, value);
-            Set(ref _useDotnetBuildForReload, !value);
-            Settings.Default.UseDotnetBuildForReload_V9 = !value;
-            Settings.Default.Save();
+            if (Set(ref _useDotnetPublishForReload, value))
+            {
+                if (value)
+                {
+                    _useDotnetBuildForReload = false;
+                    _useNoReload = false;
+                    Settings.Default.UseDotnetBuildForReload_V9 = false;
+                    Settings.Default.UseNoReload_V9 = false;
+                    RaisePropertyChanged(nameof(UseDotnetBuildForReload));
+                    RaisePropertyChanged(nameof(UseNoReload));
+                }
+                Settings.Default.Save();
+            }
         }
     }
 
@@ -327,10 +360,19 @@ public class SettingsViewModel : ViewModelBase
         get => _useDotnetBuildForReload;
         set
         {
-            Set(ref _useDotnetBuildForReload, value);
-            Set(ref _useDotnetPublishForReload, !value);
-            Settings.Default.UseDotnetBuildForReload_V9 = value;
-            Settings.Default.Save();
+            if (Set(ref _useDotnetBuildForReload, value))
+            {
+                if (value)
+                {
+                    _useDotnetPublishForReload = false;
+                    _useNoReload = false;
+                    Settings.Default.UseDotnetBuildForReload_V9 = true;
+                    Settings.Default.UseNoReload_V9 = false;
+                    RaisePropertyChanged(nameof(UseDotnetPublishForReload));
+                    RaisePropertyChanged(nameof(UseNoReload));
+                }
+                Settings.Default.Save();
+            }
         }
     }
 
@@ -449,7 +491,7 @@ public class SettingsViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(CustomEnvVars))
             return;
 
-        var pairs = CustomEnvVars.Split(new [] {"\r\n", "\n"}, StringSplitOptions.RemoveEmptyEntries);
+        var pairs = CustomEnvVars.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var pair in pairs)
         {
             var parts = pair.Split('=');

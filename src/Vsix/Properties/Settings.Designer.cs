@@ -83,7 +83,22 @@ namespace Disasmo.Properties {
                 this["UseDotnetBuildForReload_V9"] = value;
             }
         }
-        
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool UseNoReload_V9
+        {
+            get
+            {
+                return ((bool)(this["UseNoReload_V9"]));
+            }
+            set
+            {
+                this["UseNoReload_V9"] = value;
+            }
+        }
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]

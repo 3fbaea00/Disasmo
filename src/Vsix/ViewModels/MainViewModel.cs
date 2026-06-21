@@ -905,110 +905,114 @@ public class MainViewModel : ViewModelBase
                 return;
             }
 
-            var targetFrameworkPart = SettingsViewModel.DontGuessTargetFramework && string.IsNullOrWhiteSpace(SettingsViewModel.OverridenTargetFramework) 
-                ? "" 
-                : $"-f {_currentTargetFramework}";
-
-            // Some things can't be set in CLI e.g. appending to DefineConstants
-            var tempProperties = Path.GetTempFileName() + ".props";
-            File.WriteAllText(tempProperties, $"""
-                                         <?xml version="1.0" encoding="utf-8"?>
-                                         <Project>
-                                             <PropertyGroup>
-                                                 <DefineConstants>$(DefineConstants);DISASMO</DefineConstants>
-                                             </PropertyGroup>
-                                         </Project>
-                                         """);
-
-            ProcessResult publishResult;
-            if (SettingsViewModel.UseDotnetPublishForReload)
+            if (!SettingsViewModel.UseNoReload)
             {
-                LoadingStatus = $"dotnet publish -r win-{SettingsViewModel.Arch} -c Release -o ...";
+                var targetFrameworkPart = SettingsViewModel.DontGuessTargetFramework && string.IsNullOrWhiteSpace(SettingsViewModel.OverridenTargetFramework) 
+                    ? "" 
+                    : $"-f {_currentTargetFramework}";
 
-                var dotnetPublishArgs = $"publish {targetFrameworkPart} -r win-{SettingsViewModel.Arch} -c Release -o \"{DisasmoOutputDirectory}\" --self-contained true /p:PublishTrimmed=false /p:PublishSingleFile=false /p:CustomBeforeDirectoryBuildProps=\"{tempProperties}\" /p:WarningLevel=0 /p:TreatWarningsAsErrors=false -v:q";
+                // Some things can't be set in CLI e.g. appending to DefineConstants
+                var tempProperties = Path.GetTempFileName() + ".props";
+                File.WriteAllText(tempProperties, $"""
+                                             <?xml version="1.0" encoding="utf-8"?>
+                                             <Project>
+                                                 <PropertyGroup>
+                                                     <DefineConstants>$(DefineConstants);DISASMO</DefineConstants>
+                                                 </PropertyGroup>
+                                             </Project>
+                                             """);
 
-                publishResult = await ProcessUtils.RunProcess("dotnet", dotnetPublishArgs, null, currentProjectDirPath, cancellationToken: UserCancellationToken);
-            }
-            else
-            {
-                if (SettingsViewModel.UseCustomRuntime)
+                ProcessResult buildResult;
+                if (SettingsViewModel.UseDotnetPublishForReload)
                 {
-                    var (_, rpSuccess) = GetPathToRuntimePack();
-                    if (!rpSuccess)
+                    LoadingStatus = $"dotnet publish -r win-{SettingsViewModel.Arch} -c Release -o ...";
+
+                    var dotnetPublishArgs = $"publish {targetFrameworkPart} -r win-{SettingsViewModel.Arch} -c Release -o \"{DisasmoOutputDirectory}\" --self-contained true /p:PublishTrimmed=false /p:PublishSingleFile=false /p:CustomBeforeDirectoryBuildProps=\"{tempProperties}\" /p:WarningLevel=0 /p:TreatWarningsAsErrors=false -v:q";
+
+                    buildResult = await ProcessUtils.RunProcess("dotnet", dotnetPublishArgs, null, currentProjectDirPath, cancellationToken: UserCancellationToken);
+                }
+                else
+                {
+                    if (SettingsViewModel.UseCustomRuntime)
+                    {
+                        var (_, rpSuccess) = GetPathToRuntimePack();
+                        if (!rpSuccess)
+                            return;
+                    }
+
+                    LoadingStatus = "dotnet build -c Release -o ...";
+
+                    var dotnetBuildArgs = $"build {targetFrameworkPart} -c Release -o \"{DisasmoOutputDirectory}\" --no-self-contained " +
+                                             "/p:RuntimeIdentifier=\"\" " +
+                                             "/p:RuntimeIdentifiers=\"\" " +
+                                             "/p:WarningLevel=0 " +
+                                             $"/p:CustomBeforeDirectoryBuildProps=\"{tempProperties}\" " +
+                                             $"/p:TreatWarningsAsErrors=false \"{_currentProjectPath}\"";
+
+                    var fasterBuildEnvVars = new Dictionary<string, string>
+                    {
+                        ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1",
+                        ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1"
+                    };
+
+                    if (SettingsViewModel.UseNoRestoreFlag)
+                    {
+                        dotnetBuildArgs += " --no-restore --no-dependencies --nologo";
+                        fasterBuildEnvVars["DOTNET_MULTILEVEL_LOOKUP"] = "0";
+                    }
+
+                    buildResult = await ProcessUtils.RunProcess(
+                        "dotnet",
+                        dotnetBuildArgs,
+                        fasterBuildEnvVars,
+                        currentProjectDirPath,
+                        cancellationToken: UserCancellationToken);
+                }
+
+                File.Delete(tempProperties);
+                ThrowIfCanceled();
+
+                if (!string.IsNullOrEmpty(buildResult.Error))
+                {
+                    Output = buildResult.Error;
+                    return;
+                }
+
+                // In case if there are compilation errors:
+                if (buildResult.Output.Contains(": error"))
+                {
+                    Output = buildResult.Output;
+                    return;
+                }
+
+                if (SettingsViewModel.UseDotnetPublishForReload && SettingsViewModel.UseCustomRuntime)
+                {
+                    LoadingStatus = "Copying files from locally built CoreCLR";
+
+                    var destinationFolder = DisasmoOutputDirectory;
+                    if (!Path.IsPathRooted(destinationFolder))
+                    {
+                        destinationFolder = Path.Combine(currentProjectDirPath, destinationFolder);
+                    }
+
+                    if (!Directory.Exists(destinationFolder))
+                    {
+                        Output = $"Something went wrong, {destinationFolder} doesn't exist after 'dotnet publish -r win-{SettingsViewModel.Arch} -c Release' step";
                         return;
+                    }
+
+                    var copyClrFilesResult = await ProcessUtils.RunProcess("robocopy", $"/e \"{clrCheckedFilesDirectory}\" \"{destinationFolder}", null, cancellationToken: UserCancellationToken);
+
+                    if (!string.IsNullOrEmpty(copyClrFilesResult.Error))
+                    {
+                        Output = copyClrFilesResult.Error;
+                        return;
+                    }
                 }
 
-                LoadingStatus = "dotnet build -c Release -o ...";
-
-                var dotnetBuildArgs = $"build {targetFrameworkPart} -c Release -o \"{DisasmoOutputDirectory}\" --no-self-contained " +
-                                         "/p:RuntimeIdentifier=\"\" " +
-                                         "/p:RuntimeIdentifiers=\"\" " +
-                                         "/p:WarningLevel=0 " +
-                                         $"/p:CustomBeforeDirectoryBuildProps=\"{tempProperties}\" " +
-                                         $"/p:TreatWarningsAsErrors=false \"{_currentProjectPath}\"";
-
-                var fasterBuildEnvVars = new Dictionary<string, string>
-                {
-                    ["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1",
-                    ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1"
-                };
-
-                if (SettingsViewModel.UseNoRestoreFlag)
-                {
-                    dotnetBuildArgs += " --no-restore --no-dependencies --nologo";
-                    fasterBuildEnvVars["DOTNET_MULTILEVEL_LOOKUP"] = "0";
-                }
-
-                publishResult = await ProcessUtils.RunProcess(
-                    "dotnet", 
-                    dotnetBuildArgs, 
-                    fasterBuildEnvVars,
-                    currentProjectDirPath,
-                    cancellationToken: UserCancellationToken);
+                ThrowIfCanceled();
             }
 
-            File.Delete(tempProperties);
-            ThrowIfCanceled();
-
-            if (!string.IsNullOrEmpty(publishResult.Error))
-            {
-                Output = publishResult.Error;
-                return;
-            }
-
-            // In case if there are compilation errors:
-            if (publishResult.Output.Contains(": error"))
-            {
-                Output = publishResult.Output;
-                return;
-            }
-
-            if (SettingsViewModel.UseDotnetPublishForReload && SettingsViewModel.UseCustomRuntime)
-            {
-                LoadingStatus = "Copying files from locally built CoreCLR";
-
-                var destinationFolder = DisasmoOutputDirectory;
-                if (!Path.IsPathRooted(destinationFolder))
-                {
-                    destinationFolder = Path.Combine(currentProjectDirPath, destinationFolder);
-                }
-
-                if (!Directory.Exists(destinationFolder))
-                {
-                    Output = $"Something went wrong, {destinationFolder} doesn't exist after 'dotnet publish -r win-{SettingsViewModel.Arch} -c Release' step";
-                    return;
-                }
-
-                var copyClrFilesResult = await ProcessUtils.RunProcess("robocopy", $"/e \"{clrCheckedFilesDirectory}\" \"{destinationFolder}", null, cancellationToken: UserCancellationToken);
-
-                if (!string.IsNullOrEmpty(copyClrFilesResult.Error))
-                {
-                    Output = copyClrFilesResult.Error;
-                    return;
-                }
-            }
-
-            ThrowIfCanceled();
             var finalSymbolInfo = SymbolUtils.FromSymbol(_currentSymbol);
             await RunFinalExeAsync(finalSymbolInfo, projectProperties);
         }
